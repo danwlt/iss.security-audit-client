@@ -58,7 +58,6 @@ for commandObject in commands:
                 print(f"Executing: {script}")
                 process = subprocess.Popen(["bash", "-c", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 output, error = process.communicate()
-                # if process.returncode == 10 -> needs manual reviewing
                 break
             elif user_input in {'n', 'no'}:
                 print("Operation canceled.")
@@ -66,17 +65,17 @@ for commandObject in commands:
             else:
                 print("Invalid input. Please enter 'yes' or 'no'.")
     else:
-        # if process.returncode == 10 -> needs manual reviewing
         process = subprocess.Popen(["bash", "-c", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         output, error = process.communicate()
-    if process.returncode == 1:
+    if process is None:
+        continue
+    elif process.returncode == 1:
         user_feedback.append({"Error": "The execution caused unwanted results", "Requirement": commandObject['description'], "Command": commandObject['command'], "Output": output, "Reference": f"For more information, check the CIS-benchmark at chapter {commandObject['chapter']}"})
     elif process.returncode == 10:
         user_feedback.append(
             {"Error": "This command needs to be manually reviewed", "Requirement": commandObject['description'], "Command": commandObject['command'], "Output": output, "Reference": f"For more information, check the CIS-benchmark at chapter {commandObject['chapter']}"})
     result['commands'].append({'command': commandObject, 'result': {'output': output, 'value': process.returncode}})
 
-# ToDO - result.json needs to be sent to fastapi backend
 result_post = requests.post(f'{url}/result/', json=result)
 if result_post.status_code == 200:
     print("Results have been sent")
