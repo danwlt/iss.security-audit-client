@@ -1,4 +1,5 @@
 import os
+import math
 import json
 import socket
 import base64
@@ -10,8 +11,10 @@ import argparse
 
 load_dotenv()
 
-parser = argparse.ArgumentParser(description='Choose level 1 for a simple audit or level 2 for advanced security auditing.')
+parser = argparse.ArgumentParser(description='Add arguments to specify the audit.')
 parser.add_argument('--level', type=int, help='Choose between level 1 or level 2', required=True)
+parser.add_argument('-y', action='store_true', help='Automatically confirm actions without prompts')
+
 
 args = parser.parse_args()
 
@@ -21,7 +24,8 @@ if args.level not in [1, 2]:
 url = os.getenv('url', 'http://localhost:80')
 
 user_feedback = []
-result = {'score': 32, 'commands': []}
+totalPoints = 0
+result = {'commands': []}
 commands: list = []
 current_date = datetime.now().date()
 
@@ -41,16 +45,15 @@ if response.status_code == 200:
 else:
     print(f"GET request failed with status code {response.status_code}")
 
-
 for commandObject in commands:
     if commandObject['level'][1] > args.level:
         continue
-
+    totalPoints += 1 if commandObject['weight'] == 0 else commandObject['weight']
     script = base64.b64decode(commandObject["script"]).decode('utf-8')
     output = None
     process = None
 
-    if 'sudo' in script:
+    if 'sudo' in script and not args.y:
         while True:
             user_input = input(
                 f'\n"{script}"\n\nThe command contains a sudo modifier. Would you still like to run this command? [y/n]\t').strip().lower()
@@ -75,6 +78,18 @@ for commandObject in commands:
         user_feedback.append(
             {"Error": "This command needs to be manually reviewed", "Requirement": commandObject['description'], "Command": commandObject['command'], "Output": output, "Reference": f"For more information, check the CIS-benchmark at chapter {commandObject['chapter']}"})
     result['commands'].append({'command': commandObject, 'result': {'output': output, 'value': process.returncode}})
+
+score = totalPoints
+for command in result['commands']:
+    if command['result']['value'] not in [0, 10]:
+        score -= 1 if command['command']['weight'] == 0 else int(command['command']['weight'])
+    ## If Value is 10, then the command needs to be manually reviewed and can thus not be scored
+    elif command['result']['value'] == 10:
+        score -= 1 if command['command']['weight'] == 0 else int(command['command']['weight'])
+        totalPoints -= 1 if command['command']['weight'] == 0 else int(command['command']['weight'])
+        
+###        
+result['score'] = round(score/totalPoints * 100)
 
 result_post = requests.post(f'{url}/result/', json=result)
 if result_post.status_code == 200:
