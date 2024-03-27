@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 import argparse
 
+## Remove dotenv if package causes trouble
 load_dotenv()
 
 parser = argparse.ArgumentParser(description='Add arguments to specify the audit.')
